@@ -1,54 +1,33 @@
-import requests, json, os, re
-from bs4 import BeautifulSoup
+import requests, json, os, xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
-import xml.etree.ElementTree as ET
 
 GEMINI_KEY = os.getenv("GEMINI_API_KEY")
-COMPANIES = ['百度', '阿里', '字节', '小红书', '京东', '拼多多', '腾讯', 'Google', 'AI', '美团', '网易', '小米', '华为', '快手', '滴滴', '苹果', '特斯拉', 'OpenAI', '英伟达']
+# 扩充监控深度：增加子品牌与行业热词
+COMPANIES = ['百度', '阿里', '字节', '小红书', '京东', '拼多多', '腾讯', 'Google', 'AI', '美团', '网易', '小米', '华为', '快手', '滴滴', '苹果', '特斯拉', 'OpenAI', '英伟达', '半导体', '出海', '大模型']
 
-def get_headers():
-    return {
-        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0.3 Mobile/15E148 Safari/604.1',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        'Accept-Language': 'zh-CN,zh;q=0.8,zh-TW;q=0.7,zh-HK;q=0.5,en-US;q=0.3,en;q=0.2',
-    }
-
-def fetch_non_rss_sina():
-    """直接抓取新浪科技滚动新闻网页版 (非RSS)"""
+def fetch_raw():
     items = []
-    url = "https://tech.sina.com.cn/roll/rollnews.shtml"
-    try:
-        res = requests.get(url, headers=get_headers(), timeout=20)
-        res.encoding = 'utf-8'
-        soup = BeautifulSoup(res.text, 'html.parser')
-        # 解析新浪滚动新闻的列表结构
-        links = soup.select('.list_005 li a')
-        for a in links:
-            title = a.text.strip()
-            link = a.get('href', '')
-            if any(co.lower() in title.lower() for co in COMPANIES):
-                items.append({"title": title, "link": link, "desc": "来自新浪科技网页抓取"})
-    except Exception as e:
-        print(f"网页抓取失败: {e}")
-    return items
-
-def fetch_rss_sources():
-    """原有的 RSS 抓取逻辑作为稳定支撑"""
-    items = []
+    # 增加源的多样性
     sources = [
         "https://rsshub.app/36kr/newsflashes", 
         "https://rsshub.app/ithome/it",
-        "https://rsshub.app/cls/depth"
+        "https://rsshub.app/cls/depth",
+        "https://rsshub.app/huxiu/article",
+        "https://rsshub.app/techweb/it",
+        "https://rsshub.app/geekpark/breaking"
     ]
+    headers = {'User-Agent': 'Mozilla/5.0'}
     for url in sources:
         try:
-            res = requests.get(url, headers=get_headers(), timeout=20)
+            res = requests.get(url, headers=headers, timeout=20)
             root = ET.fromstring(res.text)
             for item in root.findall('./channel/item'):
                 title = (item.find('title').text or "").strip()
                 link = (item.find('link').text or "").strip()
-                if any(co.lower() in title.lower() for co in COMPANIES):
-                    items.append({"title": title, "link": link, "desc": ""})
+                desc = (item.find('description').text or "")[:400]
+                # 模糊匹配扩容
+                if any(co.lower() in (title + desc).lower() for co in COMPANIES):
+                    items.append({"title": title, "link": link, "desc": desc})
         except: continue
     return items
 
@@ -56,14 +35,15 @@ def ai_analyze(items):
     if not GEMINI_KEY or not items: return []
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_KEY}"
     
+    # 核心优化：让 AI 产出“锐评”和“价值度”
     prompt = f"""
-    你是一个资深情报分析师。请处理以下 {len(items)} 条混合来源数据：
-    1. 【合并】：语义相同的条目必须合并，保留最全的 link。
-    2. 【质量】：剔除纯广告。
-    3. 【分类】：[薪酬职级💰, 组织变化🏢, 业务动态📡, 财报研报📈, 发布会🚀, 小道消息🤫]
-    4. 【链接】：link 必须保持完整，不能修改。
-    返回严格 JSON 数组(字段:company, category, content, link, date, score)。
-    数据：{json.dumps(items[:80], ensure_ascii=False)}
+    你是一个毒舌但专业的科技分析师。请处理以下 {len(items)} 条数据：
+    1. 【深度合并】：将重复事件合并，选出最原始、最全的链接。
+    2. 【情报脱水】：content 字段请提炼为一句干货（15字内）。
+    3. 【AI锐评】：comment 字段请写一句辛辣或深刻的点评（20字内）。
+    4. 【价值度】：score 字段打分 1-5。
+    返回 JSON 数组 (字段: company, category, content, comment, link, date, score)。
+    数据：{json.dumps(items[:60], ensure_ascii=False)}
     """
     
     try:
@@ -74,10 +54,10 @@ def ai_analyze(items):
     except: return []
 
 if __name__ == "__main__":
-    # 结合 RSS 和 直接网页解析
-    all_raw = fetch_rss_sources() + fetch_non_rss_sina()
-    processed = ai_analyze(all_raw)
+    raw_data = fetch_raw()
+    processed = ai_analyze(raw_data)
     
+    # 持久化逻辑：确保数据不断累积，解决“刷新后内容少”
     data_file = 'data.json'
     old_data = []
     if os.path.exists(data_file):
@@ -85,17 +65,13 @@ if __name__ == "__main__":
             try: old_data = json.load(f)
             except: old_data = []
 
-    # 去重合并
+    # 以链接为唯一标识去重
     combined = processed + old_data
-    unique_data = []
-    seen_links = set()
-    for i in combined:
-        if i.get('link') not in seen_links:
-            unique_data.append(i)
-            seen_links.add(i.get('link'))
+    unique_map = {i.get('link'): i for i in combined if i.get('link')}
     
-    limit_date = (datetime.now() - timedelta(days=10)).strftime("%Y-%m-%d")
-    final = [i for i in unique_data if i.get('date', '') >= limit_date]
+    # 保留最近 14 天（两周）的信息，增加厚度
+    limit_date = (datetime.now() - timedelta(days=14)).strftime("%Y-%m-%d")
+    final = [v for k, v in unique_map.items() if v.get('date', '') >= limit_date]
     final.sort(key=lambda x: (x.get('date', ''), x.get('score', 0)), reverse=True)
 
     with open(data_file, 'w', encoding='utf-8') as f:
