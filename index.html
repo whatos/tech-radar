@@ -3,24 +3,27 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>悟空的情报舱-公测版</title>
+    <title>悟空的AI智核情报舱</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .active-filter { background-color: #2563eb !important; color: white !important; border-color: #2563eb !important; }
-        .vip-card { border-left: 4px solid #f59e0b; background: linear-gradient(to right, #fffbeb, #ffffff); }
+        .vip-card { border-left: 4px solid #f59e0b; background: linear-gradient(to right, #fffdf5, #ffffff); }
     </style>
 </head>
-<body class="bg-gray-50 text-gray-900 font-sans">
-    <header class="sticky top-0 bg-white/95 backdrop-blur-md shadow-sm z-50 border-b border-gray-100">
-        <div class="max-w-xl mx-auto px-4 py-3">
-            <div class="flex justify-between items-center mb-4">
-                <h1 class="text-lg font-bold tracking-tight flex items-center gap-2">
-                    <span class="bg-blue-600 text-white px-2 py-0.5 rounded-lg shadow-lg shadow-blue-200">观澜</span> 哨所
-                </h1>
-                <div class="text-right">
-                    <div id="ai-status" class="text-[9px] text-green-500 font-black tracking-widest italic">AI ANALYZED</div>
-                    <div class="text-[9px] text-gray-400">TideWatcher v2.0</div>
+<body class="bg-slate-50 text-slate-900 font-sans antialiased">
+    <header class="sticky top-0 bg-white/80 backdrop-blur-xl shadow-sm z-50 border-b border-slate-100">
+        <div class="max-w-xl mx-auto px-4 py-4">
+            <div class="flex justify-between items-start mb-5">
+                <div>
+                    <h1 class="text-xl font-black tracking-tighter flex items-center gap-2">
+                        <span class="bg-blue-600 text-white px-2 py-0.5 rounded-lg shadow-lg shadow-blue-200">观澜</span> 哨所
+                    </h1>
+                    <p class="text-[10px] text-slate-400 mt-1 font-medium uppercase tracking-widest">TideWatcher Intelligence</p>
+                </div>
+                <div class="bg-emerald-50 px-2 py-1 rounded-md border border-emerald-100">
+                    <div class="text-[9px] text-emerald-600 font-bold leading-none italic">AI ANALYZED</div>
+                    <div id="count-tag" class="text-[9px] text-emerald-500 mt-0.5 font-mono">Loading...</div>
                 </div>
             </div>
             <div id="date-filters" class="flex gap-2 overflow-x-auto pb-2 mb-2 no-scrollbar text-xs"></div>
@@ -29,8 +32,8 @@
     </header>
 
     <main class="max-w-xl mx-auto p-4">
-        <div id="list-container" class="grid gap-3">
-            <div class="text-center py-20 text-gray-400">正在监测行业巨澜...</div>
+        <div id="list-container" class="grid gap-4">
+            <div class="text-center py-20 text-slate-300 animate-pulse">正在深度研判行业巨澜...</div>
         </div>
     </main>
 
@@ -38,32 +41,33 @@
         let rawData = [];
         let filter = { date: '全部', company: '全部' };
         const catStyles = {
-            '薪酬职级💰': 'bg-red-100 text-red-700',
-            '组织变化🏢': 'bg-orange-100 text-orange-700',
-            '业务动态📡': 'bg-blue-100 text-blue-700',
-            '财报研报📈': 'bg-emerald-100 text-emerald-700',
-            '发布会🚀': 'bg-purple-100 text-purple-700',
-            '小道消息🤫': 'bg-pink-100 text-pink-700'
+            '薪酬职级💰': 'bg-red-50 text-red-600',
+            '组织变化🏢': 'bg-orange-50 text-orange-600',
+            '业务动态📡': 'bg-blue-50 text-blue-600',
+            '财报研报📈': 'bg-emerald-50 text-emerald-600',
+            '发布会🚀': 'bg-purple-50 text-purple-600',
+            '小道消息🤫': 'bg-pink-50 text-pink-600'
         };
 
         async function init() {
             try {
                 const res = await fetch('./data.json?t=' + Date.now());
                 rawData = await res.json();
+                document.getElementById('count-tag').innerText = `已沉淀 ${rawData.length} 条情报`;
                 setupFilters();
                 render();
-            } catch (e) { document.getElementById('list-container').innerText = "数据载入失败"; }
+            } catch (e) { document.getElementById('list-container').innerText = "通信链路异常"; }
         }
 
         function setupFilters() {
             const dates = ['全部', ...new Set(rawData.map(d => d.date))].sort().reverse();
             document.getElementById('date-filters').innerHTML = dates.map(d => 
-                `<button onclick="setF('date', '${d}', this)" class="date-btn whitespace-nowrap px-4 py-1.5 bg-white border border-gray-200 rounded-xl ${d==='全部'?'active-filter':''}">${d==='全部'?'全周期':d.slice(5)}</button>`
+                `<button onclick="setF('date', '${d}', this)" class="date-btn whitespace-nowrap px-4 py-1.5 bg-white border border-slate-200 rounded-xl font-bold ${d==='全部'?'active-filter':''}">${d==='全部'?'全周期':d.slice(5)}</button>`
             ).join('');
 
             const cos = ['全部', ...new Set(rawData.map(d => d.company))].slice(0, 15);
             document.getElementById('company-filters').innerHTML = cos.map(c => 
-                `<button onclick="setF('company', '${c}', this)" class="co-btn whitespace-nowrap px-3 py-1 bg-gray-200/50 rounded-full ${c==='全部'?'active-filter':''}">${c}</button>`
+                `<button onclick="setF('company', '${c}', this)" class="co-btn whitespace-nowrap px-3 py-1 bg-slate-200/50 rounded-full font-bold text-slate-500 ${c==='全部'?'active-filter':''}">${c}</button>`
             ).join('');
         }
 
@@ -78,25 +82,28 @@
             const container = document.getElementById('list-container');
             let filtered = rawData.filter(d => (filter.date==='全部'||d.date===filter.date) && (filter.company==='全部'||d.company===filter.company));
             
-            if (filtered.length === 0) {
-                container.innerHTML = `<div class="text-center py-20 text-gray-400 text-sm">暂无该项情报</div>`;
-                return;
-            }
-
             container.innerHTML = filtered.map(item => {
-                const isVip = item.score >= 4;
+                const isHigh = item.score >= 4;
                 return `
-                <a href="${item.link}" target="_blank" rel="noopener noreferrer" class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden active:scale-[0.98] transition-all ${isVip ? 'vip-card shadow-orange-100' : ''} p-5">
+                <a href="${item.link}" target="_blank" rel="noopener noreferrer" class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden active:scale-[0.98] transition-all p-5 ${isHigh ? 'vip-card ring-1 ring-orange-100' : ''}">
                     <div class="flex justify-between items-center mb-3">
                         <div class="flex items-center gap-2">
-                            <span class="font-black text-blue-800 text-xs">${item.company}</span>
-                            <span class="px-2 py-0.5 ${catStyles[item.category] || 'bg-gray-100'} rounded-md text-[10px] font-bold uppercase tracking-wider">${item.category}</span>
+                            <span class="font-black text-blue-700 text-[11px]">${item.company}</span>
+                            <span class="px-1.5 py-0.5 ${catStyles[item.category] || 'bg-slate-100'} rounded-md text-[9px] font-black uppercase tracking-wider">${item.category}</span>
                         </div>
-                        <span class="text-gray-300 font-mono text-[10px]">${item.date}</span>
+                        <div class="flex items-center gap-2">
+                            ${isHigh ? '<span class="text-orange-500 text-[9px] font-black italic">★ HIGH VALUE</span>' : ''}
+                            <span class="text-slate-300 font-mono text-[9px]">${item.date}</span>
+                        </div>
                     </div>
-                    <h2 class="text-[15px] font-bold text-gray-800 leading-snug mb-3">${item.content}</h2>
-                    <div class="text-[11px] text-blue-500 font-bold flex items-center gap-1">
-                        阅读情报原文
+                    <h2 class="text-[16px] font-bold text-slate-800 leading-snug mb-3">${item.content}</h2>
+                    <div class="bg-slate-50 rounded-xl p-3 mb-3 border-l-2 border-slate-200">
+                        <p class="text-[11px] text-slate-500 leading-relaxed font-medium">
+                            <span class="text-slate-400 font-bold uppercase tracking-tighter">AI Insight:</span> ${item.comment || '正在实时研判中...'}
+                        </p>
+                    </div>
+                    <div class="text-[10px] text-blue-500 font-black flex items-center gap-1 uppercase">
+                        Access Original Report
                         <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"></path></svg>
                     </div>
                 </a>
