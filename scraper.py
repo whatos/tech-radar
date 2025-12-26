@@ -2,40 +2,27 @@ import requests, json, os, re, xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
 
 GEMINI_KEY = os.getenv("GEMINI_API_KEY")
-# 扩充关键词，只要沾边就采集
-KEYWORDS = [
-    '百度', '阿里', '字节', '腾讯', '小红书', '京东', '美团', '小米', '华为', '快手', '滴滴', '拼多多',
-    'OpenAI', 'Google', '特斯拉', '英伟达', 'Apple', '苹果', 'AI', '大模型', '机器人', '自动驾驶',
-    '裁员', '架构调整', '年终奖', '薪酬', '职级', '高管变动', '融资', '上市', '财报', '发布会',
-    '低空经济', '半导体', '出海', '周报', '马斯克'
-]
 
 def fetch_raw():
     items = []
-    # 覆盖主流科技+财经+滚动新闻
+    # 增加深度信源，确保 AI 有足够的上下文素材
     sources = [
         "https://rsshub.app/36kr/newsflashes", 
-        "https://rsshub.app/ithome/it",
-        "https://rsshub.app/cls/depth",
         "https://rsshub.app/huxiu/article",
-        "https://rsshub.app/techweb/it",
-        "https://rsshub.app/wallstreetcn/news/global",
-        "https://rsshub.app/geekpark/breaking",
-        "https://rsshub.app/pintu/news"
+        "https://rsshub.app/cls/depth", 
+        "https://rsshub.app/wallstreetcn/news/global"
     ]
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+    headers = {'User-Agent': 'Mozilla/5.0'}
     for url in sources:
         try:
             res = requests.get(url, headers=headers, timeout=25)
-            if res.status_code != 200: continue
-            root = ET.fromstring(res.text)
+            root = ET.fromstring(res.content)
             for item in root.findall('./channel/item'):
                 title = (item.find('title').text or "").strip()
                 link = (item.find('link').text or "").strip()
-                desc = (item.find('description').text or "")[:500]
-                if any(kw.lower() in (title + desc).lower() for kw in KEYWORDS):
-                    if len(link) > 28:
-                        items.append({"title": title, "link": link, "desc": desc})
+                desc = (item.find('description').text or "")[:600] # 给 AI 更多文字素材
+                if len(title) > 8:
+                    items.append({"title": title, "link": link, "desc": desc})
         except: continue
     return items
 
@@ -43,36 +30,34 @@ def ai_analyze(items):
     if not GEMINI_KEY or not items: return []
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_KEY}"
     
+    # 深度解析 Prompt 升级
     prompt = f"""
-    你是一个毒舌且专业的资深科技主编。请处理以下 {len(items)} 条数据：
-    1. 【高包容度】：只要涉及科技行业变动或大厂动态，请全部保留。
-    2. 【任务】：提炼 company(主语), category, content(15字内干货), comment(15字内辛辣点评), score(1-5)。
-    3. 【去重】：仅合并完全相同的事件，保留最全的链接。
-    4. 【禁令】：link 必须 100% 保持原始字符串，严禁缩短或修改！
-    返回严格 JSON 数组格式。
-    数据：{json.dumps(items[:80], ensure_ascii=False)}
+    你现在是顶级战略分析师「悟空」。请从以下 {len(items)} 条新闻中，筛选出 10 条最具“产业穿透力”的消息进行日报复盘。
+    
+    要求：
+    1. 【深度解析】：不要复述新闻！请解析背后的商业逻辑、行业竞争态势或未来的隐忧。语气要犀利、专业、一针见血。
+    2. 【任务】：输出 JSON 数组。字段包括：company(主体), category(分类), content(原新闻缩写), comment(深度解析), score(价值分1-5)。
+    3. 【解析范例】：
+       - 表面新闻：美团入局大模型。
+       - 悟空解析：并非为了技术秀肌肉，而是为了防御。美团的核心资产是“人”，在大模型重塑搜索入口的当下，它必须守住本地生活的流量闭环，防止百度或字节釜底抽薪。
+    
+    数据源：{json.dumps(items[:80], ensure_ascii=False)}
     """
     
     try:
         res = requests.post(url, json={"contents": [{"parts": [{"text": prompt}]}]}, timeout=60)
-        res_data = res.json()
-        raw_text = res_data['candidates'][0]['content']['parts'][0]['text']
-        # 强力清洗：只提取 [ ] 之间的内容
+        res_json = res.json()
+        raw_text = res_json['candidates'][0]['content']['parts'][0]['text']
         json_match = re.search(r'\[.*\]', raw_text, re.DOTALL)
         if json_match:
             data = json.loads(json_match.group())
             today = datetime.now().strftime("%Y-%m-%d")
-            for d in data: d['date'] = d.get('date', today)
+            for d in data: d['date'] = today
             return data
-        return []
-    except Exception as e:
-        print(f"AI解析异常: {e}")
-        return []
+    except: return []
 
 if __name__ == "__main__":
-    new_list = fetch_raw()
-    processed = ai_analyze(new_list)
-    
+    new_data = ai_analyze(fetch_raw())
     data_file = 'data.json'
     old_data = []
     if os.path.exists(data_file):
@@ -80,10 +65,8 @@ if __name__ == "__main__":
             try: old_data = json.load(f)
             except: old_data = []
 
-    # 增量去重逻辑
-    unique_map = {item.get('link'): item for item in (processed + old_data) if item.get('link')}
-    
-    # 保留最近 14 天的情报
+    unique_map = {item.get('link'): item for item in (new_data + old_data) if item.get('link')}
+    # 只保留 14 天
     limit_date = (datetime.now() - timedelta(days=14)).strftime("%Y-%m-%d")
     final = [v for v in unique_map.values() if v.get('date', '') >= limit_date]
     final.sort(key=lambda x: (x.get('date', ''), x.get('score', 0)), reverse=True)
