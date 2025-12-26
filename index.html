@@ -1,87 +1,147 @@
-import requests, json, os, re, xml.etree.ElementTree as ET
-from datetime import datetime, timedelta
-
-GEMINI_KEY = os.getenv("GEMINI_API_KEY")
-DATA_FILE = 'data.json'
-
-def fetch_raw():
-    items = []
-    # 调整为更接地气的 18 个情报点：快讯 + 深度评论 + 小红书/社交趋势
-    sources = [
-        # --- 大厂快讯与八卦 ---
-        "https://rsshub.app/36kr/newsflashes", 
-        "https://rsshub.app/huxiu/article", 
-        "https://rsshub.app/cls/depth",
-        "https://rsshub.app/wallstreetcn/news/global",
-        "https://rsshub.app/jiemian/lists/2",
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>悟空情报仓 | 深度研判日刊</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;700;900&family=Noto+Serif+SC:wght@900&display=swap');
         
-        # --- 小红书社交情报 (通过标签聚合一线反馈) ---
-        "https://rsshub.app/xiaohongshu/user/notes/592679865e87e83489873d6b", # 举例：行业观察者
-        "https://rsshub.app/xiaohongshu/hashtag/大厂八卦",
-        "https://rsshub.app/xiaohongshu/hashtag/产品经理",
-        "https://rsshub.app/xiaohongshu/hashtag/AI动态",
+        body { font-family: 'Noto Sans SC', sans-serif; background-color: #fcfcfc; }
+        .serif { font-family: 'Noto Serif SC', serif; }
         
-        # --- 科技与产品洞察 ---
-        "https://rsshub.app/geekpark/breaking",
-        "https://rsshub.app/tmtpost/it",
-        "https://rsshub.app/ifanr/main",
-        "https://rsshub.app/pingwest/tag/科技",
-        "https://rsshub.app/latepost/main",
-        "https://rsshub.app/qbitai/sub",
+        /* 装饰性日期线 */
+        .date-divider::before, .date-divider::after { 
+            content: ""; flex: 1; height: 1px; background: #f1f5f9; 
+        }
+
+        /* 悟空研判卡片 */
+        .insight-card {
+            border-left: 4px solid #f97316;
+            transition: all 0.3s ease;
+        }
+        .insight-card:hover {
+            transform: translateX(4px);
+            box-shadow: 0 10px 20px -10px rgba(0,0,0,0.05);
+        }
+
+        /* 周汇总渐变背景 */
+        .weekly-gradient {
+            background: linear-gradient(135deg, #18181b 0%, #3f3f46 100%);
+        }
+
+        /* 隐藏滚动条但保留功能 */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+    </style>
+</head>
+<body class="text-slate-900 pb-24 selection:bg-orange-100">
+
+    <header class="bg-white/90 backdrop-blur-xl sticky top-0 z-50 border-b border-slate-100 py-6">
+        <div class="max-w-2xl mx-auto px-6 flex justify-between items-center">
+            <h1 class="text-xl font-black tracking-tight serif uppercase">
+                悟空情报 <span class="text-orange-600 italic">Strategic</span>
+            </h1>
+            <div id="unit-count" class="text-[10px] font-mono bg-slate-100 px-2 py-0.5 rounded text-slate-400 font-bold uppercase tracking-widest">
+                00 UNITS
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-2xl mx-auto px-6 mt-10">
         
-        # --- 财经与出海 ---
-        "https://rsshub.app/ft/chinese/main",
-        "https://rsshub.app/caixin/article"
-    ]
-    
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
-    
-    for url in sources:
-        try:
-            res = requests.get(url, headers=headers, timeout=25)
-            if res.status_code != 200: continue
-            root = ET.fromstring(res.content)
-            for item in root.findall('./channel/item'):
-                title = (item.find('title').text or "").strip()
-                link = (item.find('link').text or "").strip()
-                desc = (item.find('description').text or "")[:600]
-                # 过滤明显无关和重复信息
-                if len(title) > 10 and not any(kw in title for kw in ["图赏", "开箱", "招聘"]):
-                    items.append({"title": title, "link": link, "desc": desc})
-        except: continue
-    return items
+        <div id="weekly-section" class="hidden mb-16">
+            <div class="weekly-gradient rounded-3xl p-8 text-white relative shadow-2xl overflow-hidden">
+                <div class="absolute right-[-5%] top-[-10%] text-[120px] font-black opacity-[0.05] italic serif leading-none select-none">W</div>
+                <h3 class="text-orange-400 font-black text-[10px] tracking-[0.4em] uppercase mb-5 flex items-center gap-2">
+                    <span class="w-2 h-2 bg-orange-400 rounded-full animate-pulse"></span>
+                    Weekly Strategic View // 周度复盘
+                </h3>
+                <div id="weekly-text" class="text-sm leading-loose text-slate-200 font-medium tracking-wide whitespace-pre-wrap">
+                    </div>
+                <div id="weekly-date" class="text-[9px] text-slate-500 mt-8 pt-4 border-t border-white/10 font-mono tracking-widest">
+                    </div>
+            </div>
+        </div>
 
-def ai_analyze(items):
-    if not GEMINI_KEY or not items: return []
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_KEY}"
-    
-    prompt = f"""
-    你是「悟空情报仓」首席分析师。面对来自新闻、快讯以及【小红书】社交媒体的 {len(items)} 条混合情报，请精选 15 条进行深度复盘。
-    
-    要求：
-    1. 【情报敏感度】：关注新闻中的“行业剧震”，更要关注小红书等社交渠道折射出的“人心变化”和“产品微调”。
-    2. 【解析逻辑】：comment 字段必须穿透表面。如果是大厂动态，解析其战略意图；如果是社交趋势，解析其背后的用户心理或市场蓝海。
-    3. 【格式】：必须返回严格 JSON 数组：company, category, content, comment, score, link。
-    
-    数据源：{json.dumps(items[:120], ensure_ascii=False)}
-    """
-    
-    try:
-        res = requests.post(url, json={"contents": [{"parts": [{"text": prompt}]}]}, timeout=60)
-        raw_text = res.json()['candidates'][0]['content']['parts'][0]['text']
-        json_match = re.search(r'\[.*\]', raw_text, re.DOTALL)
-        if json_match:
-            data = json.loads(json_match.group())
-            today = (datetime.utcnow() + timedelta(hours=8)).strftime("%Y-%m-%d")
-            for d in data: d['date'] = today
-            return data
-    except: return []
+        <div id="feed" class="space-y-20">
+            <div class="text-center py-32">
+                <div class="inline-block w-8 h-8 border-4 border-orange-500/20 border-t-orange-500 rounded-full animate-spin"></div>
+                <p class="mt-4 text-[11px] font-black text-slate-300 tracking-[0.3em] uppercase">侦察兵回传中...</p>
+            </div>
+        </div>
+    </main>
 
-def generate_weekly_report(all_data):
-    if not GEMINI_KEY or not all_data: return None
-    last_week = (datetime.utcnow() + timedelta(hours=8) - timedelta(days=7)).strftime("%Y-%m-%d")
-    weekly_intel = [i for i in all_data if i.get('date', '') >= last_week and i.get('score', 0) >= 4]
-    if len(weekly_intel) < 5: return None
+    <script>
+        async function render() {
+            try {
+                // 增加随机参数防止缓存
+                const res = await fetch(`./data.json?t=${Date.now()}`);
+                const data = await res.json();
+                
+                // 兼容逻辑：处理数组或对象格式
+                const intel = Array.isArray(data) ? data : (data.intel || []);
+                const weekly = Array.isArray(data) ? null : data.weekly_report;
 
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_KEY}"
-    prompt = f"你是首席战略官。请根据本周这些核心情报，总结 3 个本周行业最核心的【变化趋势】。语气要冷静
+                // 更新计数器
+                document.getElementById('unit-count').innerText = `${intel.length.toString().padStart(2, '0')} UNITS`;
+
+                // 渲染周汇总
+                if (weekly && weekly.report) {
+                    document.getElementById('weekly-section').classList.remove('hidden');
+                    document.getElementById('weekly-text').innerText = weekly.report;
+                    document.getElementById('weekly-date').innerText = `TIMELINE: ${weekly.week_range}`;
+                }
+
+                // 按日期分组渲染
+                const grouped = intel.reduce((acc, i) => { 
+                    const d = i.date || "Archive";
+                    (acc[d] = acc[d] || []).push(i); 
+                    return acc; 
+                }, {});
+                
+                const sortedDates = Object.keys(grouped).sort().reverse();
+
+                document.getElementById('feed').innerHTML = sortedDates.map(date => `
+                    <section>
+                        <div class="date-divider flex items-center gap-4 mb-12">
+                            <span class="text-[11px] font-black text-slate-300 font-mono tracking-[0.2em] italic uppercase">${date}</span>
+                        </div>
+                        <div class="space-y-14">
+                            ${grouped[date].map(item => `
+                                <div class="group relative">
+                                    <div class="flex items-center gap-2 mb-3">
+                                        <span class="bg-slate-900 text-white text-[9px] px-2 py-0.5 font-bold rounded-sm tracking-wider uppercase">${item.company || 'Global'}</span>
+                                        <span class="text-slate-400 text-[9px] font-bold uppercase tracking-widest">${item.category || 'NEWS'}</span>
+                                        <span class="text-orange-500 text-[9px] font-mono tracking-tighter">${'★'.repeat(item.score || 3)}</span>
+                                    </div>
+                                    
+                                    <h2 class="text-lg font-bold text-slate-800 mb-4 group-hover:text-orange-600 transition-colors leading-snug tracking-tight">
+                                        <a href="${item.link}" target="_blank" rel="noopener">${item.content}</a>
+                                    </h2>
+                                    
+                                    <div class="bg-white border border-slate-100 p-5 rounded-2xl shadow-sm insight-card">
+                                        <p class="text-[13.5px] text-slate-600 leading-relaxed font-medium text-justify">
+                                            <span class="text-orange-600 font-black mr-2 text-[10px] tracking-tighter uppercase italic">悟空研判 //</span>
+                                            ${item.comment || item.analysis || '深度情报解析中...'}
+                                        </p>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </section>
+                `).join('');
+            } catch (e) {
+                console.error(e);
+                document.getElementById('feed').innerHTML = `
+                    <div class="text-center py-24">
+                        <p class="text-red-400 font-black italic tracking-widest text-xs uppercase">Data Link Severed</p>
+                        <p class="text-slate-300 text-[10px] mt-2">请检查 data.json 格式或 GitHub Actions 运行状态</p>
+                    </div>`;
+            }
+        }
+        
+        render();
+    </script>
+</body>
+</html>
