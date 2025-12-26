@@ -6,67 +6,74 @@
     <title>悟空的情报仓-深度日刊</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        .date-group::before { content: ""; flex: 1; height: 2px; background: #f1f5f9; }
-        .score-star { color: #f97316; font-size: 10px; }
-        .insight-box { position: relative; overflow: hidden; }
-        .insight-box::before { content: "INTEL"; position: absolute; right: -5px; top: -5px; font-size: 30px; font-weight: 900; color: rgba(249,115,22,0.05); }
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@700;900&display=swap');
+        .serif { font-family: 'Noto Serif SC', serif; }
+        .date-line::before, .date-line::after { content: ""; flex: 1; height: 1px; background: #e2e8f0; }
+        .score-star { color: #f97316; }
+        .card-shadow { box-shadow: 0 10px 30px -10px rgba(0,0,0,0.05); }
     </style>
 </head>
-<body class="bg-[#fcfcfc] text-slate-900 font-sans">
-    <header class="bg-white border-b border-slate-100 py-12 px-4 sticky top-0 z-50 bg-white/80 backdrop-blur-md">
-        <div class="max-w-xl mx-auto flex justify-between items-center">
+<body class="bg-[#f8f9fa] text-slate-900 antialiased pb-20">
+    <header class="bg-white border-b border-slate-100 py-12 px-6 sticky top-0 z-50 bg-white/80 backdrop-blur-md">
+        <div class="max-w-2xl mx-auto flex justify-between items-end">
             <div>
-                <h1 class="text-2xl font-black text-slate-900 tracking-tighter">悟空的情报仓 <span class="text-orange-500">· 深度版</span></h1>
-                <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Strategic Industry Analysis Archive</p>
+                <h1 class="text-3xl font-black tracking-tighter serif">悟空的情报仓 <span class="text-orange-500">· 深度版</span></h1>
+                <p class="text-[10px] text-slate-400 font-bold uppercase tracking-[0.2em] mt-2">Daily Strategic Intelligence & Analysis</p>
             </div>
-            <div id="stat" class="text-right">
-                <div class="text-xl font-black text-slate-200" id="total-count">00</div>
-                <div class="text-[8px] text-slate-300 font-bold uppercase">Stored</div>
+            <div class="text-right hidden sm:block">
+                <span id="count" class="text-2xl font-black text-slate-200 font-mono italic leading-none">00</span>
+                <p class="text-[8px] text-slate-300 font-bold uppercase">Units</p>
             </div>
         </div>
     </header>
 
-    <main id="container" class="max-w-xl mx-auto px-4 py-8 space-y-12">
-        </main>
+    <main id="main" class="max-w-2xl mx-auto px-6 mt-12 space-y-16">
+        <div class="text-center py-20 text-slate-300 animate-pulse font-medium">正在调取情报档案...</div>
+    </main>
 
     <script>
-        async function init() {
-            const res = await fetch('./data.json?t=' + Date.now());
-            const data = await res.json();
-            document.getElementById('total-count').innerText = data.length;
+        async function load() {
+            try {
+                const res = await fetch('./data.json?t=' + Date.now());
+                const data = await res.json();
+                document.getElementById('count').innerText = data.length.toString().padStart(2, '0');
 
-            const groups = data.reduce((acc, i) => { (acc[i.date] = acc[i.date] || []).push(i); return acc; }, {});
+                // 按日期分组
+                const groups = data.reduce((acc, i) => { (acc[i.date] = acc[i.date] || []).push(i); return acc; }, {});
+                const sortedDates = Object.keys(groups).sort().reverse();
 
-            document.getElementById('container').innerHTML = Object.keys(groups).sort().reverse().map(date => `
-                <section>
-                    <div class="flex items-center gap-4 mb-8 opacity-40">
-                        <div class="h-[1px] flex-1 bg-slate-300"></div>
-                        <span class="text-xs font-black font-mono">${date}</span>
-                        <div class="h-[1px] flex-1 bg-slate-300"></div>
-                    </div>
-                    <div class="space-y-8">
-                        ${groups[date].map(item => `
-                            <div class="group">
-                                <div class="flex items-center gap-2 mb-2">
-                                    <span class="text-[10px] font-bold bg-slate-900 text-white px-2 py-0.5 rounded-sm">${item.company}</span>
-                                    <span class="text-[10px] text-slate-400 font-medium">${item.category}</span>
-                                    <span class="score-star">${'★'.repeat(item.score)}</span>
+                document.getElementById('main').innerHTML = sortedDates.map(date => `
+                    <section>
+                        <div class="date-line flex items-center gap-6 mb-10 opacity-50">
+                            <span class="text-xs font-black font-mono tracking-widest">${date}</span>
+                        </div>
+                        <div class="space-y-12">
+                            ${groups[date].map(item => `
+                                <div class="group">
+                                    <div class="flex items-center gap-2 mb-3">
+                                        <span class="text-[10px] font-black bg-orange-500 text-white px-1.5 py-0.5 rounded-sm shadow-sm shadow-orange-200">${item.company || '未知'}</span>
+                                        <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">${item.category || '情报'}</span>
+                                        <span class="score-star text-[9px]">${'★'.repeat(item.score || 3)}</span>
+                                    </div>
+                                    <h2 class="text-xl font-bold text-slate-800 mb-4 leading-snug group-hover:text-orange-500 transition-colors">
+                                        <a href="${item.link || '#'}" target="_blank" rel="noopener">${item.content || '无标题情报'}</a>
+                                    </h2>
+                                    <div class="bg-white border border-slate-100 p-5 rounded-2xl card-shadow border-l-4 border-l-orange-500">
+                                        <p class="text-[14px] text-slate-600 leading-relaxed text-justify font-medium">
+                                            <span class="font-black text-orange-600 mr-2 text-[11px] uppercase">悟空研判：</span>
+                                            ${item.comment || item.analysis || '该情报正处于深度研判中...'}
+                                        </p>
+                                    </div>
                                 </div>
-                                <h2 class="text-lg font-bold text-slate-800 mb-3 group-hover:text-orange-500 transition-colors">
-                                    <a href="${item.link}" target="_blank">${item.content}</a>
-                                </h2>
-                                <div class="insight-box bg-orange-50/50 border-l-4 border-orange-500 p-4 rounded-r-xl">
-                                    <p class="text-[13px] text-slate-600 leading-relaxed font-medium text-justify">
-                                        <span class="font-black text-orange-600 mr-1">悟空解析：</span>${item.comment}
-                                    </p>
-                                </div>
-                            </div>
-                        `).join('')}
-                    </div>
-                </section>
-            `).join('');
+                            `).join('')}
+                        </div>
+                    </section>
+                `).join('');
+            } catch (e) {
+                document.getElementById('main').innerHTML = `<div class="py-20 text-center text-red-400 font-bold italic tracking-tighter">DATA LINK FAILURE</div>`;
+            }
         }
-        init();
+        load();
     </script>
 </body>
 </html>
