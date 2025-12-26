@@ -3,30 +3,40 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>悟空的情报舱-娱乐版</title>
+    <title>悟空的情报仓-测试版</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         .no-scrollbar::-webkit-scrollbar { display: none; }
-        .active-filter { background-color: #2563eb !important; color: white !important; border-color: #2563eb !important; }
-        .vip-card { border-left: 4px solid #f59e0b; background: linear-gradient(to right, #fffdf5, #ffffff); }
+        .active-filter { background-color: #f97316 !important; color: white !important; border-color: #f97316 !important; }
+        .vip-card { border-left: 4px solid #f97316; background: linear-gradient(to right, #fffaf5, #ffffff); }
     </style>
 </head>
-<body class="bg-slate-50 text-slate-900 font-sans">
-    <header class="sticky top-0 bg-white/80 backdrop-blur-xl shadow-sm z-50 border-b border-slate-100 px-4 py-4">
+<body class="bg-slate-50 text-slate-900 font-sans antialiased">
+    <header class="sticky top-0 bg-white/90 backdrop-blur-xl shadow-sm z-50 border-b border-slate-100 px-4 py-4">
         <div class="max-w-xl mx-auto">
-            <div class="flex justify-between items-center mb-4">
-                <h1 class="text-xl font-bold italic tracking-tighter text-blue-600">观澜哨所 TIDEWATCHER</h1>
-                <div class="text-[9px] bg-emerald-100 text-emerald-700 px-2 py-1 rounded font-black tracking-tighter">
-                    AI ANALYZED <span id="data-count">0</span>
+            <div class="flex justify-between items-start mb-5">
+                <div>
+                    <h1 class="text-xl font-black tracking-tighter flex items-center gap-2">
+                        <span class="bg-orange-500 text-white px-2 py-0.5 rounded-lg shadow-lg shadow-orange-200">悟空</span> 
+                        <span class="text-slate-800">的情报仓</span>
+                        <span class="text-[10px] bg-slate-100 text-slate-400 px-1 rounded ml-1 border border-slate-200 font-normal">测试版</span>
+                    </h1>
+                    <p class="text-[10px] text-slate-400 mt-1 font-medium uppercase tracking-widest italic">Wukong Intel Cabin v1.0 Beta</p>
+                </div>
+                <div class="bg-orange-50 px-2 py-1 rounded-md border border-orange-100">
+                    <div id="count-tag" class="text-[10px] text-orange-600 font-black font-mono tracking-tighter text-right leading-none">LOADING...</div>
+                    <div class="text-[8px] text-orange-400 font-bold mt-0.5">INTEL POOL</div>
                 </div>
             </div>
-            <div id="date-filters" class="flex gap-2 overflow-x-auto pb-2 no-scrollbar text-[11px]"></div>
-            <div id="company-filters" class="flex gap-2 overflow-x-auto pb-1 no-scrollbar text-[11px] mt-2"></div>
+            <div id="date-filters" class="flex gap-2 overflow-x-auto pb-2 mb-1 no-scrollbar text-[11px]"></div>
+            <div id="company-filters" class="flex gap-2 overflow-x-auto pb-1 no-scrollbar text-[11px] mt-1"></div>
         </div>
     </header>
 
     <main class="max-w-xl mx-auto p-4">
-        <div id="list-container" class="grid gap-4"></div>
+        <div id="list-container" class="grid gap-4">
+            <div class="text-center py-20 text-slate-300 animate-pulse">正在拨开迷雾，搜寻大厂情报...</div>
+        </div>
     </main>
 
     <script>
@@ -35,46 +45,16 @@
         const catStyles = {'薪酬职级💰': 'bg-red-50 text-red-600', '组织变化🏢': 'bg-orange-50 text-orange-600', '业务动态📡': 'bg-blue-50 text-blue-600', '财报研报📈': 'bg-emerald-50 text-emerald-600', '发布会🚀': 'bg-purple-50 text-purple-600', '小道消息🤫': 'bg-pink-50 text-pink-600'};
 
         async function init() {
-            const res = await fetch('./data.json?t=' + Date.now());
-            rawData = await res.json();
-            document.getElementById('data-count').innerText = `TOTAL: ${rawData.length}`;
-            setupFilters();
-            render();
+            try {
+                const res = await fetch('./data.json?t=' + Date.now());
+                rawData = await res.json();
+                document.getElementById('count-tag').innerText = rawData.length;
+                setupFilters();
+                render();
+            } catch (e) { document.getElementById('list-container').innerText = "情报链路中断"; }
         }
 
         function setupFilters() {
             const dates = ['全部', ...new Set(rawData.map(d => d.date))].sort().reverse();
-            document.getElementById('date-filters').innerHTML = dates.map(d => `<button onclick="setF('date','${d}',this)" class="px-3 py-1 bg-white border border-slate-200 rounded-lg whitespace-nowrap ${d==='全部'?'active-filter':''}">${d}</button>`).join('');
-            const cos = ['全部', ...new Set(rawData.map(d => d.company))].slice(0, 15);
-            document.getElementById('company-filters').innerHTML = cos.map(c => `<button onclick="setF('company','${c}',this)" class="px-3 py-1 bg-slate-200/50 rounded-full whitespace-nowrap ${c==='全部'?'active-filter':''}">${c}</button>`).join('');
-        }
-
-        function setF(type, val, el) {
-            filter[type] = val;
-            document.querySelectorAll(type==='date'?'.date-btn':'.co-btn').forEach(b => b.classList.remove('active-filter'));
-            render();
-        }
-
-        function render() {
-            const container = document.getElementById('list-container');
-            let filtered = rawData.filter(d => (filter.date==='全部'||d.date===filter.date) && (filter.company==='全部'||d.company===filter.company));
-            container.innerHTML = filtered.map(item => `
-                <a href="${item.link}" target="_blank" class="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 block transition-all hover:shadow-md ${item.score >= 4 ? 'vip-card' : ''}">
-                    <div class="flex justify-between items-center mb-2">
-                        <div class="flex gap-2">
-                            <span class="font-bold text-blue-600 text-xs">${item.company}</span>
-                            <span class="${catStyles[item.category] || 'bg-slate-100'} text-[9px] px-1.5 py-0.5 rounded font-bold">${item.category}</span>
-                        </div>
-                        <span class="text-slate-300 text-[9px] font-mono">${item.date}</span>
-                    </div>
-                    <h2 class="text-[15px] font-bold text-slate-800 leading-snug mb-3">${item.content}</h2>
-                    <div class="bg-slate-50 rounded-lg p-3 text-[11px] text-slate-500 border-l-2 border-slate-200 mb-2">
-                        <span class="font-bold text-slate-400">AI INSIGHT:</span> ${item.comment}
-                    </div>
-                </a>
-            `).join('');
-        }
-        init();
-    </script>
-</body>
-</html>
+            document.getElementById('date-filters').innerHTML = dates.map(d => `<button onclick="setF('date','${d}',this)" class="px-4 py-1.5 bg-white border border-slate-200 rounded-xl font-bold whitespace-nowrap ${d==='全部'?'active-filter':''}">${d==='全部'?'全周期':d.slice(5)}</button>`).join('');
+            const cos =
