@@ -5,78 +5,90 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>悟空的信息哨兵</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-        body { -webkit-tap-highlight-color: transparent; }
-    </style>
+    <style> .no-scrollbar::-webkit-scrollbar { display: none; } </style>
 </head>
-<body class="bg-gray-50 text-gray-900 antialiased">
+<body class="bg-gray-50 text-gray-900">
     <header class="sticky top-0 bg-white/80 backdrop-blur-md shadow-sm z-50">
         <div class="max-w-xl mx-auto p-4">
-            <h1 class="text-xl font-bold mb-4 text-center flex justify-center items-center gap-2">
-                <span>🛡️</span> 悟空的信息哨兵
-            </h1>
-            <div id="filter-company" class="flex gap-2 overflow-x-auto pb-1 no-scrollbar text-sm">
-                </div>
+            <h1 class="text-xl font-bold mb-4 text-center">🛡️ 悟空的信息哨兵</h1>
+            <div id="filter-company" class="flex gap-2 overflow-x-auto pb-1 no-scrollbar text-sm"></div>
         </div>
     </header>
 
     <main id="app" class="max-w-xl mx-auto p-4">
-        <div class="text-center py-20 text-gray-400 animate-pulse">
-            正在同步近一周情报...
-        </div>
+        <div id="list-container" class="text-center py-20 text-gray-400">正在同步近一周情报...</div>
     </main>
 
     <script>
         let rawData = [];
-        const todayStr = new Date().toISOString().split('T')[0];
 
-        async function loadData() {
+        async function init() {
             try {
-                // 读取数据并增加时间戳防止缓存
-                const res = await fetch('./data.json?t=' + new Date().getTime());
+                const res = await fetch('./data.json?t=' + Date.now());
                 rawData = await res.json();
                 
-                if (!rawData || rawData.length === 0) {
-                    document.getElementById('app').innerHTML = '<div class="text-center py-20 text-gray-400">哨兵巡逻中，暂无近一周动态</div>';
+                if (!Array.isArray(rawData) || rawData.length === 0) {
+                    document.getElementById('list-container').innerHTML = "暂无情报，哨兵巡逻中...";
                     return;
                 }
 
-                renderFilters();
-                renderItems(rawData);
+                // 渲染筛选按钮
+                const cos = ['全部', ...new Set(rawData.map(d => d.company))];
+                document.getElementById('filter-company').innerHTML = cos.map(c => 
+                    `<button onclick="filter('${c}', this)" class="btn-filter whitespace-nowrap px-4 py-1.5 bg-gray-100 rounded-full">${c}</button>`
+                ).join('');
+                
+                render(rawData);
             } catch (e) {
-                document.getElementById('app').innerHTML = '<div class="text-center py-20 text-red-400">情报读取失败，请检查数据源</div>';
+                document.getElementById('list-container').innerHTML = "数据加载异常";
             }
         }
 
-        function renderFilters() {
-            const cos = ['全部', ...new Set(rawData.map(d => d.company))];
-            const container = document.getElementById('filter-company');
-            container.innerHTML = cos.map(c => `
-                <button onclick="filterBy('${c}', this)" class="filter-btn whitespace-nowrap px-4 py-1.5 bg-gray-100 rounded-full transition-all border border-transparent">
-                    ${c}
-                </button>
-            `).join('');
-            // 默认高亮“全部”
-            container.querySelector('button').classList.add('bg-blue-600', 'text-white');
-        }
+        function render(data) {
+            const container = document.getElementById('list-container');
+            container.innerHTML = "";
+            container.classList.remove('text-center', 'py-20', 'text-gray-400');
 
-        function renderItems(data) {
-            const container = document.getElementById('app');
-            
-            // 按日期分组逻辑
+            // 分组
             const groups = {};
             data.forEach(item => {
-                if (!groups[item.date]) groups[item.date] = [];
+                if(!groups[item.date]) groups[item.date] = [];
                 groups[item.date].push(item);
             });
 
-            // 获取排序后的日期
-            const sortedDates = Object.keys(groups).sort().reverse();
-
-            container.innerHTML = sortedDates.map(date => `
-                <div class="mb-8">
+            Object.keys(groups).sort().reverse().forEach(date => {
+                const section = document.createElement('div');
+                section.className = "mb-8";
+                section.innerHTML = `
                     <div class="flex items-center mb-4 text-gray-400">
                         <div class="h-px bg-gray-200 flex-grow"></div>
-                        <span class="px-3 text-[12px] font-bold tracking-widest uppercase">
-                            ${date === todayStr ? '
+                        <span class="px-3 text-[10px] font-bold">${date}</span>
+                        <div class="h-px bg-gray-200 flex-grow"></div>
+                    </div>
+                    <div class="space-y-4">
+                        ${groups[date].map(item => `
+                            <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+                                <div class="flex justify-between items-center mb-2">
+                                    <span class="text-xs font-bold text-blue-600">${item.company}</span>
+                                    <span class="text-[10px] text-gray-400">${item.category}</span>
+                                </div>
+                                <a href="${item.link}" target="_blank" class="block font-medium hover:text-blue-600">${item.content}</a>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+                container.appendChild(section);
+            });
+        }
+
+        function filter(c, btn) {
+            document.querySelectorAll('.btn-filter').forEach(b => b.classList.remove('bg-blue-600', 'text-white'));
+            btn.classList.add('bg-blue-600', 'text-white');
+            const filtered = c === '全部' ? rawData : rawData.filter(d => d.company === c);
+            render(filtered);
+        }
+
+        init();
+    </script>
+</body>
+</html>
