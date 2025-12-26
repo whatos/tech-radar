@@ -3,24 +3,38 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>悟空的信息哨兵</title>
+    <title>悟空哨兵 - 情报面板</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <style> .no-scrollbar::-webkit-scrollbar { display: none; } </style>
+    <style>
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .active-filter { background-color: #2563eb !important; color: white !important; border-color: #2563eb !important; }
+    </style>
 </head>
 <body class="bg-gray-50 text-gray-900">
-    <header class="sticky top-0 bg-white/80 backdrop-blur-md shadow-sm z-50">
-        <div class="max-w-xl mx-auto p-4">
-            <h1 class="text-xl font-bold mb-4 text-center">🛡️ 悟空的信息哨兵</h1>
-            <div id="filter-company" class="flex gap-2 overflow-x-auto pb-1 no-scrollbar text-sm"></div>
+    <header class="sticky top-0 bg-white/90 backdrop-blur-md shadow-sm z-50 border-b border-gray-100">
+        <div class="max-w-xl mx-auto px-4 py-3">
+            <div class="flex justify-between items-center mb-4">
+                <h1 class="text-lg font-bold tracking-tight">🛡️ 悟空情报哨兵</h1>
+                <span id="update-time" class="text-[10px] text-gray-400">正在实时监测...</span>
+            </div>
+            
+            <div id="date-filters" class="flex gap-2 overflow-x-auto pb-2 mb-2 no-scrollbar text-xs">
+                </div>
+            
+            <div id="company-filters" class="flex gap-2 overflow-x-auto pb-1 no-scrollbar text-xs">
+                </div>
         </div>
     </header>
 
     <main id="app" class="max-w-xl mx-auto p-4">
-        <div id="list-container" class="text-center py-20 text-gray-400">正在同步近一周情报...</div>
+        <div id="list-container" class="space-y-4">
+            <div class="text-center py-20 text-gray-400 animate-pulse">正在调取最新情报...</div>
+        </div>
     </main>
 
     <script>
         let rawData = [];
+        let currentFilter = { date: '全部', company: '全部' };
 
         async function init() {
             try {
@@ -28,64 +42,74 @@
                 rawData = await res.json();
                 
                 if (!Array.isArray(rawData) || rawData.length === 0) {
-                    document.getElementById('list-container').innerHTML = "暂无情报，哨兵巡逻中...";
+                    document.getElementById('list-container').innerHTML = "暂无数据";
                     return;
                 }
 
-                // 渲染筛选按钮
-                const cos = ['全部', ...new Set(rawData.map(d => d.company))];
-                document.getElementById('filter-company').innerHTML = cos.map(c => 
-                    `<button onclick="filter('${c}', this)" class="btn-filter whitespace-nowrap px-4 py-1.5 bg-gray-100 rounded-full">${c}</button>`
-                ).join('');
-                
-                render(rawData);
+                setupFilters();
+                render();
             } catch (e) {
-                document.getElementById('list-container').innerHTML = "数据加载异常";
+                document.getElementById('list-container').innerHTML = "加载失败";
             }
         }
 
-        function render(data) {
-            const container = document.getElementById('list-container');
-            container.innerHTML = "";
-            container.classList.remove('text-center', 'py-20', 'text-gray-400');
+        function setupFilters() {
+            // 提取日期
+            const dates = ['全部', ...new Set(rawData.map(d => d.date))].sort().reverse();
+            const dateContainer = document.getElementById('date-filters');
+            dateContainer.innerHTML = dates.map(d => 
+                `<button onclick="setFilter('date', '${d}', this)" class="date-btn whitespace-nowrap px-3 py-1 bg-white border border-gray-200 rounded-lg text-gray-600 ${d==='全部'?'active-filter':''}">${d === '全部' ? '所有日期' : d.split('-').slice(1).join('/')}</button>`
+            ).join('');
 
-            // 分组
-            const groups = {};
-            data.forEach(item => {
-                if(!groups[item.date]) groups[item.date] = [];
-                groups[item.date].push(item);
-            });
-
-            Object.keys(groups).sort().reverse().forEach(date => {
-                const section = document.createElement('div');
-                section.className = "mb-8";
-                section.innerHTML = `
-                    <div class="flex items-center mb-4 text-gray-400">
-                        <div class="h-px bg-gray-200 flex-grow"></div>
-                        <span class="px-3 text-[10px] font-bold">${date}</span>
-                        <div class="h-px bg-gray-200 flex-grow"></div>
-                    </div>
-                    <div class="space-y-4">
-                        ${groups[date].map(item => `
-                            <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-                                <div class="flex justify-between items-center mb-2">
-                                    <span class="text-xs font-bold text-blue-600">${item.company}</span>
-                                    <span class="text-[10px] text-gray-400">${item.category}</span>
-                                </div>
-                                <a href="${item.link}" target="_blank" class="block font-medium hover:text-blue-600">${item.content}</a>
-                            </div>
-                        `).join('')}
-                    </div>
-                `;
-                container.appendChild(section);
-            });
+            // 提取公司
+            const cos = ['全部', ...new Set(rawData.map(d => d.company))];
+            const coContainer = document.getElementById('company-filters');
+            coContainer.innerHTML = cos.map(c => 
+                `<button onclick="setFilter('company', '${c}', this)" class="co-btn whitespace-nowrap px-3 py-1 bg-gray-100 rounded-full text-gray-500 ${c==='全部'?'active-filter':''}">${c}</button>`
+            ).join('');
         }
 
-        function filter(c, btn) {
-            document.querySelectorAll('.btn-filter').forEach(b => b.classList.remove('bg-blue-600', 'text-white'));
-            btn.classList.add('bg-blue-600', 'text-white');
-            const filtered = c === '全部' ? rawData : rawData.filter(d => d.company === c);
-            render(filtered);
+        function setFilter(type, value, el) {
+            // 更新状态
+            currentFilter[type] = value;
+
+            // 更新 UI 样式
+            const btnClass = type === 'date' ? '.date-btn' : '.co-btn';
+            document.querySelectorAll(btnClass).forEach(b => b.classList.remove('active-filter'));
+            el.classList.add('active-filter');
+
+            render();
+        }
+
+        function render() {
+            const container = document.getElementById('list-container');
+            
+            // 执行双重过滤
+            let filtered = rawData.filter(d => {
+                const matchDate = currentFilter.date === '全部' || d.date === currentFilter.date;
+                const matchCo = currentFilter.company === '全部' || d.company === currentFilter.company;
+                return matchDate && matchCo;
+            });
+
+            if (filtered.length === 0) {
+                container.innerHTML = `<div class="text-center py-20 text-gray-400 text-sm">该筛选条件下暂无情报</div>`;
+                return;
+            }
+
+            container.innerHTML = filtered.map(item => `
+                <div class="bg-white rounded-xl p-4 shadow-sm border border-gray-100 active:scale-[0.98] transition-transform">
+                    <div class="flex justify-between items-start mb-2">
+                        <div class="flex items-center gap-2">
+                            <span class="text-sm font-bold text-blue-600">${item.company}</span>
+                            <span class="px-1.5 py-0.5 bg-gray-50 text-gray-400 text-[9px] rounded font-medium">${item.category}</span>
+                        </div>
+                        <span class="text-[9px] text-gray-300 font-mono">${item.date}</span>
+                    </div>
+                    <a href="${item.link}" target="_blank" class="block text-sm leading-relaxed font-medium text-gray-800 hover:text-blue-600 decoration-blue-500/30 underline-offset-4">
+                        ${item.content}
+                    </a>
+                </div>
+            `).join('');
         }
 
         init();
