@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>悟空哨兵 - 全渠道情报</title>
+    <title>悟空哨兵 - 深度情报</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         .no-scrollbar::-webkit-scrollbar { display: none; }
@@ -15,7 +15,7 @@
         <div class="max-w-xl mx-auto px-4 py-3">
             <div class="flex justify-between items-center mb-4">
                 <h1 class="text-lg font-bold tracking-tight">🛡️ 悟空情报哨兵</h1>
-                <span id="update-time" class="text-[10px] text-gray-400">研报/八卦/全网监测</span>
+                <span class="text-[10px] text-gray-400">产品动态 · 财报 · 爆料</span>
             </div>
             <div id="date-filters" class="flex gap-2 overflow-x-auto pb-2 mb-2 no-scrollbar text-xs"></div>
             <div id="company-filters" class="flex gap-2 overflow-x-auto pb-1 no-scrollbar text-xs"></div>
@@ -23,8 +23,8 @@
     </header>
 
     <main class="max-w-xl mx-auto p-4">
-        <div id="list-container" class="space-y-4">
-            <div class="text-center py-20 text-gray-400">正在调取最新深度情报...</div>
+        <div id="list-container" class="space-y-3">
+            <div class="text-center py-20 text-gray-400">同步情报中...</div>
         </div>
     </main>
 
@@ -42,20 +42,21 @@
 
         async function init() {
             try {
+                // 加随机数防止缓存
                 const res = await fetch('./data.json?t=' + Date.now());
                 rawData = await res.json();
                 setupFilters();
                 render();
-            } catch (e) { document.getElementById('list-container').innerText = "数据载入失败"; }
+            } catch (e) { document.getElementById('list-container').innerText = "加载失败"; }
         }
 
         function setupFilters() {
             const dates = ['全部', ...new Set(rawData.map(d => d.date))].sort().reverse();
             document.getElementById('date-filters').innerHTML = dates.map(d => 
-                `<button onclick="setF('date', '${d}', this)" class="date-btn whitespace-nowrap px-3 py-1 bg-white border border-gray-200 rounded-lg ${d==='全部'?'active-filter':''}">${d==='全部'?'所有日期':d.slice(5).replace('-','/')}</button>`
+                `<button onclick="setF('date', '${d}', this)" class="date-btn whitespace-nowrap px-3 py-1 bg-white border border-gray-200 rounded-lg ${d==='全部'?'active-filter':''}">${d==='全部'?'全部日期':d.slice(5)}</button>`
             ).join('');
 
-            const cos = ['全部', ...new Set(rawData.map(d => d.company))];
+            const cos = ['全部', ...new Set(rawData.map(d => d.company))].slice(0, 15);
             document.getElementById('company-filters').innerHTML = cos.map(c => 
                 `<button onclick="setF('company', '${c}', this)" class="co-btn whitespace-nowrap px-3 py-1 bg-gray-100 rounded-full ${c==='全部'?'active-filter':''}">${c}</button>`
             ).join('');
@@ -72,26 +73,26 @@
             const container = document.getElementById('list-container');
             let filtered = rawData.filter(d => (filter.date==='全部'||d.date===filter.date) && (filter.company==='全部'||d.company===filter.company));
             
-            if (filtered.length === 0) {
-                container.innerHTML = `<div class="text-center py-20 text-gray-400 text-sm">今日暂无该项情报</div>`;
-                return;
-            }
-
-            container.innerHTML = filtered.map(item => {
-                const style = catStyles[item.category] || 'bg-gray-50 text-gray-500';
-                return `
-                <div class="bg-white rounded-xl p-4 shadow-sm border border-gray-100 active:bg-gray-50">
-                    <div class="flex justify-between items-start mb-2 text-[10px]">
-                        <div class="flex gap-2">
-                            <span class="font-bold text-blue-700">${item.company}</span>
-                            <span class="px-1.5 py-0.5 ${style} rounded font-medium">${item.category}</span>
+            container.innerHTML = filtered.map(item => `
+                <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden active:bg-gray-50 transition-colors">
+                    <a href="${item.link}" target="_blank" rel="noopener noreferrer" class="block p-4">
+                        <div class="flex justify-between items-start mb-2 text-[10px]">
+                            <div class="flex gap-2">
+                                <span class="font-bold text-blue-700 underline">${item.company}</span>
+                                <span class="px-1.5 py-0.5 ${catStyles[item.category] || 'bg-gray-100'} rounded font-medium">${item.category}</span>
+                            </div>
+                            <span class="text-gray-300 font-mono">${item.date}</span>
                         </div>
-                        <span class="text-gray-300 font-mono">${item.date}</span>
-                    </div>
-                    <a href="${item.link}" target="_blank" class="block text-[14px] font-medium text-gray-800 leading-relaxed">${item.content}</a>
+                        <h2 class="text-[15px] font-semibold text-gray-800 leading-snug">
+                            ${item.content}
+                        </h2>
+                        <div class="mt-2 text-[10px] text-blue-500 font-medium flex items-center gap-1">
+                            查看原文 
+                            <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+                        </div>
+                    </a>
                 </div>
-                `;
-            }).join('');
+            `).join('');
         }
         init();
     </script>
