@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>悟空哨兵 - 日报面板</title>
+    <title>悟空哨兵 - 全渠道情报</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         .no-scrollbar::-webkit-scrollbar { display: none; }
@@ -11,11 +11,11 @@
     </style>
 </head>
 <body class="bg-gray-50 text-gray-900">
-    <header class="sticky top-0 bg-white/90 backdrop-blur-md shadow-sm z-50 border-b border-gray-100">
+    <header class="sticky top-0 bg-white/95 backdrop-blur-md shadow-sm z-50 border-b border-gray-100">
         <div class="max-w-xl mx-auto px-4 py-3">
             <div class="flex justify-between items-center mb-4">
                 <h1 class="text-lg font-bold tracking-tight">🛡️ 悟空情报哨兵</h1>
-                <span id="update-time" class="text-[10px] text-gray-400">每日更新 · 自动判重</span>
+                <span id="update-time" class="text-[10px] text-gray-400">研报/八卦/全网监测</span>
             </div>
             <div id="date-filters" class="flex gap-2 overflow-x-auto pb-2 mb-2 no-scrollbar text-xs"></div>
             <div id="company-filters" class="flex gap-2 overflow-x-auto pb-1 no-scrollbar text-xs"></div>
@@ -24,13 +24,21 @@
 
     <main class="max-w-xl mx-auto p-4">
         <div id="list-container" class="space-y-4">
-            <div class="text-center py-20 text-gray-400">正在调取日报...</div>
+            <div class="text-center py-20 text-gray-400">正在调取最新深度情报...</div>
         </div>
     </main>
 
     <script>
         let rawData = [];
         let filter = { date: '全部', company: '全部' };
+        const catStyles = {
+            '薪酬职级💰': 'bg-red-50 text-red-600',
+            '组织变化🏢': 'bg-orange-50 text-orange-600',
+            '业务动态📡': 'bg-blue-50 text-blue-600',
+            '财报研报📈': 'bg-emerald-50 text-emerald-600',
+            '发布会🚀': 'bg-purple-50 text-purple-600',
+            '小道消息🤫': 'bg-pink-50 text-pink-600'
+        };
 
         async function init() {
             try {
@@ -38,13 +46,13 @@
                 rawData = await res.json();
                 setupFilters();
                 render();
-            } catch (e) { document.getElementById('list-container').innerText = "加载失败"; }
+            } catch (e) { document.getElementById('list-container').innerText = "数据载入失败"; }
         }
 
         function setupFilters() {
             const dates = ['全部', ...new Set(rawData.map(d => d.date))].sort().reverse();
             document.getElementById('date-filters').innerHTML = dates.map(d => 
-                `<button onclick="setF('date', '${d}', this)" class="date-btn whitespace-nowrap px-3 py-1 bg-white border border-gray-200 rounded-lg ${d==='全部'?'active-filter':''}">${d==='全部'?'所有日期':d.slice(5)}</button>`
+                `<button onclick="setF('date', '${d}', this)" class="date-btn whitespace-nowrap px-3 py-1 bg-white border border-gray-200 rounded-lg ${d==='全部'?'active-filter':''}">${d==='全部'?'所有日期':d.slice(5).replace('-','/')}</button>`
             ).join('');
 
             const cos = ['全部', ...new Set(rawData.map(d => d.company))];
@@ -65,22 +73,25 @@
             let filtered = rawData.filter(d => (filter.date==='全部'||d.date===filter.date) && (filter.company==='全部'||d.company===filter.company));
             
             if (filtered.length === 0) {
-                container.innerHTML = `<div class="text-center py-20 text-gray-400 text-sm">暂无数据</div>`;
+                container.innerHTML = `<div class="text-center py-20 text-gray-400 text-sm">今日暂无该项情报</div>`;
                 return;
             }
 
-            container.innerHTML = filtered.map(item => `
-                <div class="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+            container.innerHTML = filtered.map(item => {
+                const style = catStyles[item.category] || 'bg-gray-50 text-gray-500';
+                return `
+                <div class="bg-white rounded-xl p-4 shadow-sm border border-gray-100 active:bg-gray-50">
                     <div class="flex justify-between items-start mb-2 text-[10px]">
                         <div class="flex gap-2">
-                            <span class="font-bold text-blue-600">${item.company}</span>
-                            <span class="text-gray-400">${item.category}</span>
+                            <span class="font-bold text-blue-700">${item.company}</span>
+                            <span class="px-1.5 py-0.5 ${style} rounded font-medium">${item.category}</span>
                         </div>
-                        <span class="text-gray-300">${item.date}</span>
+                        <span class="text-gray-300 font-mono">${item.date}</span>
                     </div>
-                    <a href="${item.link}" target="_blank" class="block text-sm font-medium text-gray-800 leading-snug">${item.content}</a>
+                    <a href="${item.link}" target="_blank" class="block text-[14px] font-medium text-gray-800 leading-relaxed">${item.content}</a>
                 </div>
-            `).join('');
+                `;
+            }).join('');
         }
         init();
     </script>
