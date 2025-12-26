@@ -9,6 +9,9 @@
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .active-filter { background-color: #f97316 !important; color: white !important; border-color: #f97316 !important; }
         .vip-card { border-left: 4px solid #f97316; background: linear-gradient(to right, #fffaf5, #ffffff); }
+        /* 页面平滑过渡 */
+        .fade-in { animation: fadeIn 0.5s ease-in; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-900 font-sans antialiased">
@@ -23,38 +26,10 @@
                     </h1>
                     <p class="text-[10px] text-slate-400 mt-1 font-medium uppercase tracking-widest italic">Wukong Intel Cabin v1.0 Beta</p>
                 </div>
-                <div class="bg-orange-50 px-2 py-1 rounded-md border border-orange-100">
-                    <div id="count-tag" class="text-[10px] text-orange-600 font-black font-mono tracking-tighter text-right leading-none">LOADING...</div>
-                    <div class="text-[8px] text-orange-400 font-bold mt-0.5">INTEL POOL</div>
+                <div class="bg-orange-50 px-2 py-1 rounded-md border border-orange-100 min-w-[60px] text-center">
+                    <div id="count-tag" class="text-[12px] text-orange-600 font-black font-mono tracking-tighter leading-none">0</div>
+                    <div class="text-[8px] text-orange-400 font-bold mt-0.5 uppercase">Intelligence</div>
                 </div>
             </div>
             <div id="date-filters" class="flex gap-2 overflow-x-auto pb-2 mb-1 no-scrollbar text-[11px]"></div>
             <div id="company-filters" class="flex gap-2 overflow-x-auto pb-1 no-scrollbar text-[11px] mt-1"></div>
-        </div>
-    </header>
-
-    <main class="max-w-xl mx-auto p-4">
-        <div id="list-container" class="grid gap-4">
-            <div class="text-center py-20 text-slate-300 animate-pulse">正在拨开迷雾，搜寻大厂情报...</div>
-        </div>
-    </main>
-
-    <script>
-        let rawData = [];
-        let filter = { date: '全部', company: '全部' };
-        const catStyles = {'薪酬职级💰': 'bg-red-50 text-red-600', '组织变化🏢': 'bg-orange-50 text-orange-600', '业务动态📡': 'bg-blue-50 text-blue-600', '财报研报📈': 'bg-emerald-50 text-emerald-600', '发布会🚀': 'bg-purple-50 text-purple-600', '小道消息🤫': 'bg-pink-50 text-pink-600'};
-
-        async function init() {
-            try {
-                const res = await fetch('./data.json?t=' + Date.now());
-                rawData = await res.json();
-                document.getElementById('count-tag').innerText = rawData.length;
-                setupFilters();
-                render();
-            } catch (e) { document.getElementById('list-container').innerText = "情报链路中断"; }
-        }
-
-        function setupFilters() {
-            const dates = ['全部', ...new Set(rawData.map(d => d.date))].sort().reverse();
-            document.getElementById('date-filters').innerHTML = dates.map(d => `<button onclick="setF('date','${d}',this)" class="px-4 py-1.5 bg-white border border-slate-200 rounded-xl font-bold whitespace-nowrap ${d==='全部'?'active-filter':''}">${d==='全部'?'全周期':d.slice(5)}</button>`).join('');
-            const cos =
