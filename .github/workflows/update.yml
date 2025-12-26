@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>互联网分析师看板</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 p-4">
+    <div class="max-w-md mx-auto">
+        <h1 class="text-2xl font-bold mb-4 text-blue-800 text-center">行业动态雷达</h1>
+        <div id="filters" class="flex flex-wrap gap-2 mb-6 justify-center"></div>
+        <div id="list" class="space-y-4">加载中...</div>
+    </div>
+
+    <script>
+        async function init() {
+            const res = await fetch('./data.json');
+            const data = await res.json();
+            const cos = ['全部', ...new Set(data.map(d => d.company))];
+            
+            const render = (items) => {
+                document.getElementById('list').innerHTML = items.map(i => `
+                    <div class="bg-white p-4 rounded-lg shadow-sm border-l-4 border-blue-500">
+                        <div class="flex justify-between text-xs text-gray-400 mb-1">
+                            <span>${i.company} · ${i.category}</span>
+                            <span>${i.date}</span>
+                        </div>
+                        <a href="${i.link}" target="_blank" class="text-sm font-medium hover:text-blue-600">${i.content}</a>
+                    </div>
+                `).join('');
+            };
+
+            document.getElementById('filters').innerHTML = cos.map(c => 
+                `<button onclick="window.filter('${c}')" class="px-3 py-1 bg-white border rounded-full text-xs">${c}</button>`
+            ).join('');
+
+            window.filter = (c) => render(c === '全部' ? data : data.filter(d => d.company === c));
+            render(data);
+        }
+        init();
+    </script>
+</body>
+</html>
