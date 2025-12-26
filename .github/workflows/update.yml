@@ -2,8 +2,11 @@ name: AutoUpdate
 
 on:
   schedule:
-    - cron: '0 0 * * *' # 每天运行一次
-  workflow_dispatch: # 支持手动触发
+    - cron: '0 */4 * * *' # 每4小时运行一次，增加信息量
+  workflow_dispatch:      # 支持手动触发
+
+permissions:
+  contents: write         # 显式声明写权限
 
 jobs:
   build:
@@ -19,7 +22,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install requests beautifulsoup4  # 确保这里包含所有用到的库
+          pip install requests beautifulsoup4
 
       - name: Run scraper
         env:
@@ -31,5 +34,5 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add data.json
-          git commit -m "Update data.json" || exit 0
+          git commit -m "Update intelligence data" || exit 0
           git push
