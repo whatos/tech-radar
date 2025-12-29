@@ -4,78 +4,76 @@ from datetime import datetime, timedelta
 GEMINI_KEY = os.getenv("GEMINI_API_KEY")
 DATA_FILE = 'data.json'
 
-def fetch_from_36kr():
-    """直连 36氪 API (最稳)"""
+def fetch_materials():
+    pool = []
+    print("开始抓取公开新闻...")
+    # 36氪
     try:
-        url = "https://gateway.36kr.com/api/mis/nav/home/nav/latest"
-        data = {"partner_id":"web","timestamp": int(time.time()), "param":{"pageSize":20}}
-        res = requests.post(url, json=data, timeout=15).json()
-        items = res['data']['itemList']
-        return [{"title": i['templateData']['itemTitle'], "link": f"https://36kr.com/p/{i['itemId']}", "desc": ""} for i in items]
-    except: return []
+        r = requests.post("https://gateway.36kr.com/api/mis/nav/home/nav/latest", json={"partner_id":"web","param":{"pageSize":30}}, timeout=10).json()
+        titles = [f"【36Kr】{i['templateData']['itemTitle']}" for i in r['data']['itemList']]
+        pool += titles
+        print(f"36氪抓取成功: {len(titles)} 条")
+    except Exception as e: print(f"36氪抓取失败: {e}")
 
-def fetch_from_cls():
-    """直连财联社 API (财经/政策深度)"""
+    # 财联社
     try:
-        url = "https://www.cls.cn/nodeapi/telegraphList?app=CailianpressWeb&os=web"
-        res = requests.get(url, timeout=15).json()
-        items = res['data']['roll_data']
-        return [{"title": i['title'] or i['content'][:50], "link": "https://www.cls.cn", "desc": i['content']} for i in items]
-    except: return []
+        r = requests.get("https://www.cls.cn/nodeapi/telegraphList?app=CailianpressWeb", timeout=10).json()
+        contents = [f"【财联社】{i['content'][:150]}" for i in r['data']['roll_data']]
+        pool += contents
+        print(f"财联社抓取成功: {len(contents)} 条")
+    except Exception as e: print(f"财联社抓取失败: {e}")
+    
+    return list(set(pool))
 
-def ai_analyze(items):
-    if not GEMINI_KEY or not items: return []
+def ai_analyze(raw_texts):
+    if not GEMINI_KEY:
+        print("错误: 缺少 GEMINI_API_KEY")
+        return []
+    if not raw_texts:
+        print("警告: 原始素材池为空")
+        return []
+        
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_KEY}"
-    
-    # 强制 AI 输出 15 条
-    prompt = f"""
-    你是首席情报官「悟空」。以下是从各大厂接口实时抓取的 {len(items)} 条原始素材。
-    任务：筛选并复盘 15 条情报。
-    
-    要求：
-    1. 【结构】：company, category, content, comment, score, link。
-    2. 【广度】：必须涵盖大厂动向、AI进展、出海策略。
-    3. 【深度】：comment 字段必须解析背后的战略意图，不许复述标题。
-    
-    素材：{json.dumps(items[:100], ensure_ascii=False)}
-    """
+    prompt = f"你是顶尖顾问。请从以下语料提炼 12 条深度情报，重点词用 **加粗**。JSON格式 [{{'company':'..','category':'..','content':'..','comment':'..','score':5,'link':'..'}}]。语料：{json.dumps(raw_texts, ensure_ascii=False)}"
     
     try:
+        print("正在请求 AI 进行深度研判...")
         res = requests.post(url, json={"contents": [{"parts": [{"text": prompt}]}]}, timeout=60)
-        raw_text = res.json()['candidates'][0]['content']['parts'][0]['text']
-        json_match = re.search(r'\[.*\]', raw_text, re.DOTALL)
+        res_json = res.json()
+        
+        if 'candidates' not in res_json:
+            print(f"AI 请求失败，API响应: {res_json}")
+            return []
+
+        text = res_json['candidates'][0]['content']['parts'][0]['text']
+        json_match = re.search(r'\[.*\]', text, re.DOTALL)
         if json_match:
             data = json.loads(json_match.group())
-            today = (datetime.utcnow() + timedelta(hours=8)).strftime("%Y-%m-%d")
+            today = (datetime.utcnow() + timedelta(hours=8)).strftime("%m/%d %H:%M") # 加入分钟，确保文件内容发生变化
             for d in data: d['date'] = today
+            print(f"AI 研判成功: 获得 {len(data)} 条情报")
             return data
-    except: return []
-
-# 复用之前的 generate_weekly_report 函数 ...
+    except Exception as e:
+        print(f"AI 研判异常: {e}")
+    return []
 
 if __name__ == "__main__":
-    # 聚合多条直连通道
-    raw_materials = fetch_from_36kr() + fetch_from_cls()
+    materials = fetch_materials()
+    new_data = ai_analyze(materials)
     
-    # 如果抓取到的太少，增加备选
-    if len(raw_materials) < 10:
-        # 这里可以加入更多直连接口
-        pass
-
-    new_intel = ai_analyze(raw_materials)
-    
-    # 数据持久化逻辑 (与之前相同)
-    data_payload = {"intel": [], "weekly_report": None}
+    storage = {"intel": []}
     if os.path.exists(DATA_FILE):
-        with open(DATA_FILE, 'r', encoding='utf-8') as f:
-            try:
+        try:
+            with open(DATA_FILE, 'r', encoding='utf-8') as f:
                 content = json.load(f)
-                data_payload["intel"] = content if isinstance(content, list) else content.get("intel", [])
-            except: pass
+                storage["intel"] = content if isinstance(content, list) else content.get("intel", [])
+        except: pass
 
-    unique_map = {item.get('content')[:10]: item for item in (new_intel + data_payload["intel"])}
-    limit_date = (datetime.utcnow() + timedelta(hours=8) - timedelta(days=14)).strftime("%Y-%m-%d")
-    data_payload["intel"] = sorted(unique_map.values(), key=lambda x: x.get('date', ''), reverse=True)[:100]
-
-    with open(DATA_FILE, 'w', encoding='utf-8') as f:
-        json.dump(data_payload, f, ensure_ascii=False, indent=4)
+    if new_data:
+        # 强制更新：将新数据放在最前面
+        storage["intel"] = (new_data + storage["intel"])[:100]
+        with open(DATA_FILE, 'w', encoding='utf-8') as f:
+            json.dump(storage, f, ensure_ascii=False, indent=4)
+        print("数据已写入 data.json")
+    else:
+        print("未获取到新数据，跳过写入")
